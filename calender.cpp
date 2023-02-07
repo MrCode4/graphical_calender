@@ -18,7 +18,7 @@ std::counting_semaphore<1> print_signal(1);
 
 std::atomic<bool> is_in_calender_menu = false;
 
-int MODE = 0;
+std::atomic<int> MODE = 1;
 
 void background_text_color(int textColor, int backgroundColor) 
 {
@@ -92,13 +92,47 @@ int consolesizey()
 
 int key_menu(string a)
 {
-	getk:
 	int k=getch();
 	if (k==104 || k==72) return 1;
 	else if (k==99 || k==67) return 0;
 	else if (k==66 || k==98) return 3;
 	else if(k==27) exit(0);
-	else goto getk;
+	else if(k==13)//enter
+	{
+		if(MODE == 1)
+			exit(0);
+		else if(MODE == 2)
+			return 1;
+		else if(MODE == 3)
+			return 0;
+		else if(MODE == 4)
+			return 3;
+		else 
+		{
+			return key_menu(a);
+		}
+	}
+	else if(k == 50)//2
+	{
+		MODE++;
+
+		if(MODE == 5)
+			MODE = 1;
+
+		return key_menu(a);
+	}
+	else if(k == 56)//8
+	{
+		MODE--;
+		if(MODE == 0)
+			MODE = 4;
+
+		return key_menu(a);
+	}
+	else
+	{
+		return key_menu(a);
+	}
 }
 
 pair<SHORT, SHORT> get_left_top_corner_pos()
@@ -139,7 +173,14 @@ void print_menu_bar()
 
 				gotoxy(x, y);
 
+				if(MODE == i+1)
+					text_color(25);
+
 				cout << menus[i];
+
+				if(MODE == i+1)
+					defualt_color(1);
+
 				for(int j=0;j<16-(menus[i].size());j++) 
 					cout  << " ";
 
@@ -322,7 +363,6 @@ void set_calendar_size()
 	if (s==27) exit(0);
 	else if (s==49) 
 	{
-		MODE = 1;
 	system("cls");
 	system("MODE CON COLS=168") ;
 		if(consolesizex()<152) 
@@ -344,7 +384,6 @@ void set_calendar_size()
 	
 	else if (s==50) 
 	{
-		MODE = 2;
 		system("cls");
 		system("MODE CON COLS=130") ;
 		if(consolesizex()<114) 
@@ -366,14 +405,12 @@ void set_calendar_size()
 	
 	else if (s==51) 
 	{
-		MODE = 3;
 		system("cls");
 		system("MODE CON COLS=92") ;
 		return;
 	}
 	else if (s==52)
 	{
-		MODE = 4;
 		system("cls");
 		system("MODE CON COLS=54") ;
 		return;
