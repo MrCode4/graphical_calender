@@ -8,109 +8,17 @@
 #include <unistd.h>
 #include <atomic>
 #include <mutex>
+#include <winuser.h>
 
 using namespace std;
 
-vector<string> menus = {"Menu1", "Menu2", "Menu3", "Menu4"};
+vector<string> menus = {"[Esc] Exit", "[H] HomePgae", "[C] Month", "[B] Mode"};
 
-std::mutex m_mutex;
+std::counting_semaphore<1> print_signal(1);
 
-void clear_menu()
-{
-	int x = 0, y = 0;
-	gotoxy(x,y);
-	for(int j=0;j<menus.size()*7;j++)
-	{
-		for(int i=0;i<16;i++)
-			cout << " ";
-		cout << endl;
-	}
-}
+std::atomic<bool> is_in_calender_menu = false;
 
-
-void print_menu_bar()
-{
-	int past_x = wherex();
-	int past_y = wherey();
-
-	while(true)
-	{
-	while(!exit_thread_flag)
-	{
-		m_mutex.lock();
-	//background_text_color(9, 15);
-	//text_color(12);
-
-	int x = 0 , y = 0;	
-	gotoxy(x, y);
-
-	for(int i=0;i<16;i++)
-		cout << "-";
-
-	y++;
-
-	gotoxy(x, y);
-	cout << "|     MENU     |\n";
-	cout << "|              |";
-	y+=2;
-
-	for(int i=0; i<menus.size(); i++)
-	{
-		gotoxy(x, y);
-
-		cout << "|";
-		x++;
-
-		gotoxy(x, y);
-
-		cout << menus[i];
-		for(int j=0;j<16-(menus[i].size());j++) 
-			cout  << " ";
-
-		x = 15;
-		gotoxy(x, y);
-		cout << "|";
-
-		x = 0;
-		y++;
-
-		gotoxy(x, y);
-		cout << "|              |";
-		y++;
-
-	}
-
-
-	// gotoxy(x, y);
-	// for(;y<consolesizey();y++)
-	// {
-	// 	gotoxy(x, y);
-	// 	cout << "|              |";
-	// }
-
-	gotoxy(x,y);
-	for(int i=0;i<16;i++)
-		cout << "-";
-
-	cout << endl << endl;
-
-	y+=3;
-	x=0;
-	m_mutex.unlock();
-
-	sleep(5);
-
-	m_mutex.lock();
-	clear_menu();
-	m_mutex.unlock();
-	
-	//gotoxy(0, consolesizey());
-	//gotoxy(past_x, past_y);
-	}
-
-	sleep(5);
-	}
-}
+int MODE = 0;
 
 void background_text_color(int textColor, int backgroundColor) 
 {
@@ -166,7 +74,7 @@ int consolesizex()
 
     GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
     columns = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-    rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+   
     return columns;
 }
 
@@ -176,9 +84,99 @@ int consolesizey()
     int columns, rows;
 
     GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    columns = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+   
     rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
     return rows;
+}
+
+
+int key_menu(string a)
+{
+	getk:
+	int k=getch();
+	if (k==104 || k==72) return 1;
+	else if (k==99 || k==67) return 0;
+	else if (k==66 || k==98) return 3;
+	else if(k==27) exit(0);
+	else goto getk;
+}
+
+pair<SHORT, SHORT> get_left_top_corner_pos()
+{
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+
+    return {csbi.srWindow.Left, csbi.srWindow.Top};
+}
+
+void print_menu_bar()
+{
+	while(true)
+	{
+		if(is_in_calender_menu)
+		{				
+			print_signal.acquire();
+
+			pair<SHORT, SHORT> left_top_pos = get_left_top_corner_pos();
+
+			int x = static_cast<int>(left_top_pos.first);
+			int y = static_cast<int>(left_top_pos.second);
+
+			gotoxy(x, y);
+			cout << "----------------\n";
+			cout << "|     MENU     |\n";
+			cout << "|--------------|\n";
+			cout << "|              |";
+			y+=4;
+
+			for(int i=0; i<menus.size(); i++)
+			{
+				gotoxy(x, y);
+
+				cout << "|";
+				x++;
+
+				gotoxy(x, y);
+
+				cout << menus[i];
+				for(int j=0;j<16-(menus[i].size());j++) 
+					cout  << " ";
+
+				x = 15;
+				gotoxy(x, y);
+				cout << "|";
+
+				x = 0;
+				y++;
+
+				gotoxy(x, y);
+				cout << "|              |";
+				y++;
+
+			}
+
+			gotoxy(x, y);
+			for(int i=0;i<16;i++)
+				cout << "-";
+			
+			y++;
+
+			gotoxy(x,y);
+
+			for(int p = 0;p <consolesizey() - (menus.size()*2+10);p++)
+				cout << "                " << endl;
+
+			print_signal.release();
+
+			this_thread::sleep_for(std::chrono::milliseconds(200));
+
+		}
+		else
+		{
+			this_thread::sleep_for(std::chrono::milliseconds(400));			
+		}
+	}
 }
 
 void fullscreen()
@@ -222,6 +220,8 @@ string month_name(int a)
 
 void menu ()
 {
+	print_signal.acquire();
+
 	cout<<"-------------------------------------------------\n";
 	cout<<"                Solar Calender"<<endl;
 	cout<<"-------------------------------------------------\n\n\n";
@@ -236,6 +236,8 @@ void menu ()
 	cout<<"                [7] Friday"<<endl;
 	cout<<"_________________________________________________\n";
 	cout<<"Choose a menu option, or press ESC to exit:";
+
+	print_signal.release();	
 }
 
 int getfirstday()
@@ -247,6 +249,7 @@ int getfirstday()
 		cout<<"\n\nEntered Key Is Wrong!\n";
 		cout<<"_________________________________________________\n";
 		cout<<"Choose a menu option, or press ESC to exit:";
+
 		n=getch();
 		if (n==27) exit(0);
 	}
@@ -319,6 +322,7 @@ void set_calendar_size()
 	if (s==27) exit(0);
 	else if (s==49) 
 	{
+		MODE = 1;
 	system("cls");
 	system("MODE CON COLS=168") ;
 		if(consolesizex()<152) 
@@ -340,6 +344,7 @@ void set_calendar_size()
 	
 	else if (s==50) 
 	{
+		MODE = 2;
 		system("cls");
 		system("MODE CON COLS=130") ;
 		if(consolesizex()<114) 
@@ -361,12 +366,14 @@ void set_calendar_size()
 	
 	else if (s==51) 
 	{
+		MODE = 3;
 		system("cls");
 		system("MODE CON COLS=92") ;
 		return;
 	}
 	else if (s==52)
 	{
+		MODE = 4;
 		system("cls");
 		system("MODE CON COLS=54") ;
 		return;
@@ -396,6 +403,8 @@ int month_calendar(int firstday , int monthnumber , int new_x , int new_y , int 
 	else if (monthnumber<=9) text_color(27) ; 
 	else if (monthnumber<=12) text_color(75) ; 
 	
+	print_signal.acquire();
+
 	gotoxy(new_x,new_y);
 	cout<<month_name(monthnumber);
 	
@@ -454,6 +463,8 @@ int month_calendar(int firstday , int monthnumber , int new_x , int new_y , int 
 			startcolumns+=4;
 		}
 	}
+
+	print_signal.release();
 
 return firstday;
 }
@@ -607,25 +618,9 @@ void set_theme(string a)
 	}
 }
 
-int key_menu(string a)
-{
-	cout<<"\n\n\n\n\n\n\n\n";
-	cout<< "[Esc] Exit\n";
-	cout<< "[H]   HomePgae\n";
-	cout<< "[C]   Customize Month\n";
-	cout<< "[B]   "<<a<<"Mode\n";
-	getk:
-	int k=getch();
-	if (k==104 || k==72) return 1;
-	else if (k==99 || k==67) return 0;
-	else if (k==66 || k==98) return 3;
-	else if(k==27) exit(0);
-	else goto getk;
-}
-
-
 int main()
 {
+	thread t1(print_menu_bar);
 homepage:
 	
 	string theme="Dark";
@@ -649,26 +644,23 @@ calendar:
 	
 printcalendar:	
 	
-	exit_thread_flag = false;
-
-	thread t1(print_menu_bar);
-
-	m_mutex.lock();
+	is_in_calender_menu = true;
 	calendar(firstday , firstmonth  , lastmonth , kabise , theme_mode);
-	m_mutex.unlock();
 
 	int key=key_menu(a);
-	
-	exit_thread_flag = true;
+
+	is_in_calender_menu = false;
 
 	if (key==1) 
 	{
 	 system("cls");
+	
 	 goto homepage ;
 	}
 	
 	else if (key==0) 
 	{
+	
 Customize:
 	 set_menu_size();
    	 system("cls");
